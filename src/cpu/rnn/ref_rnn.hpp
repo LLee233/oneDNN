@@ -136,8 +136,7 @@ struct _ref_rnn_common_t : public primitive_t {
             using namespace dnnl::impl::cpu::x64;
             return rnn_.is_brgemm
                     ? JIT_IMPL_NAME_HELPER("brgemm:", rnn_.brgemm_isa, "")
-                    : rnn_.use_matmul ? "ref+matmul"
-                                      : "ref";
+                    : "ref";
 #else
             return "ref";
 #endif

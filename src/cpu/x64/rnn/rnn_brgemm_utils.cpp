@@ -84,8 +84,7 @@ x64::cpu_isa_t brgemm_calc_isa(
     }
 
     if (rnn.is_cell_dt_int8()) {
-        return utils::map(true, x64::isa_undef, mayiuse(avx512_core_vnni),
-                avx512_core_vnni, mayiuse(avx512_core), avx512_core);
+        return x64::avx512_core_vnni;
     } else if (rnn.is_cell_dt_bf16()) {
         return x64::avx512_core_bf16;
     } else if (rnn.is_cell_dt_f16()) {

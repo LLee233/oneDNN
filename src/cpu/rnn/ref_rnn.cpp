@@ -191,19 +191,19 @@ status_t dnnl::impl::cpu::_ref_rnn_common_t<aprop, src_type, weights_type,
                                   dim_t LDC, bool sum_po) {
         memory_desc_t src_desc;
         const dims_t src_dims = {M, K};
-        const dims_t src_strides = {LDA, 1};
+        const dims_t src_strides = {1, LDA};
         CHECK(memory_desc_init_by_strides(
                 src_desc, 2, src_dims, src_type, src_strides));
 
         memory_desc_t wei_desc;
         const dims_t wei_dims = {K, N};
-        const dims_t wei_strides = {LDB, 1};
+        const dims_t wei_strides = {1, LDB};
         CHECK(memory_desc_init_by_strides(
                 wei_desc, 2, wei_dims, weights_type, wei_strides));
 
         memory_desc_t dst_desc;
         const dims_t dst_dims = {M, N};
-        const dims_t dst_strides = {LDC, 1};
+        const dims_t dst_strides = {1, LDC};
         CHECK(memory_desc_init_by_strides(
                 dst_desc, 2, dst_dims, scratch_type, dst_strides));
 
@@ -228,66 +228,66 @@ status_t dnnl::impl::cpu::_ref_rnn_common_t<aprop, src_type, weights_type,
 
     if (rnn_.use_matmul) {
         { // init layer matmuls
-            const dim_t M = rnn_.mb;
-            const dim_t N = static_cast<dim_t>(rnn_.n_gates) * rnn_.dhc;
+            const dim_t M = static_cast<dim_t>(rnn_.n_gates) * rnn_.dhc;
+            const dim_t N = rnn_.mb;
             const dim_t K = rnn_.slc;
-            const dim_t LDA1 = rnn_.src_layer_ld_;
-            const dim_t LDA2 = rnn_.ws_states_layer_ld;
-            const dim_t LDA3 = rnn_.dst_iter_ld_;
-            const dim_t LDB = rnn_.weights_layer_ld;
+            const dim_t LDA = rnn_.weights_layer_ld;
+            const dim_t LDB1 = rnn_.src_layer_ld_;
+            const dim_t LDB2 = rnn_.ws_states_layer_ld;
+            const dim_t LDB3 = rnn_.dst_iter_ld_;
             const dim_t LDC = rnn_.scratch_gates_ld;
             const bool do_sum = false;
-            if (LDA1 >= K)
+            if (LDB1 >= K)
                 CHECK(init_matmul_pd(
-                        matmul_layer_1_pd_, M, N, K, LDA1, LDB, LDC, do_sum));
-            if (LDA2 >= K && LDA2 != LDA1)
+                        matmul_layer_1_pd_, M, N, K, LDA, LDB1, LDC, do_sum));
+            if (LDB2 >= K && LDB2 != LDB1)
                 CHECK(init_matmul_pd(
-                        matmul_layer_2_pd_, M, N, K, LDA2, LDB, LDC, do_sum));
-            if (LDA3 >= K && !utils::one_of(LDA3, LDA1, LDA2))
+                        matmul_layer_2_pd_, M, N, K, LDA, LDB2, LDC, do_sum));
+            if (LDB3 >= K && !utils::one_of(LDB3, LDB1, LDB2))
                 CHECK(init_matmul_pd(
-                        matmul_layer_3_pd_, M, N, K, LDA3, LDB, LDC, do_sum));
+                        matmul_layer_3_pd_, M, N, K, LDA, LDB3, LDC, do_sum));
         }
 
         { // init iter matmuls
-            const dim_t M = rnn_.mb;
-            const dim_t N = static_cast<dim_t>(rnn_.dhc)
+            const dim_t M = static_cast<dim_t>(rnn_.dhc)
                     * (rnn_.n_gates - rnn_.is_orig_gru);
+            const dim_t N = rnn_.mb;
             const dim_t K = rnn_.sic;
-            const dim_t LDA1 = rnn_.src_iter_ld_;
-            const dim_t LDA2 = rnn_.ws_states_iter_ld;
-            const dim_t LDA3 = rnn_.dst_layer_ld_;
-            const dim_t LDB = rnn_.weights_iter_ld;
+            const dim_t LDA = rnn_.weights_iter_ld;
+            const dim_t LDB1 = rnn_.src_iter_ld_;
+            const dim_t LDB2 = rnn_.ws_states_iter_ld;
+            const dim_t LDB3 = rnn_.dst_layer_ld_;
             const dim_t LDC
                     = rnn_.is_lbr ? rnn_.ws_gates_ld : rnn_.scratch_gates_ld;
             const bool do_sum = !rnn_.is_lbr;
-            if (LDA1 >= K)
+            if (LDB1 >= K)
                 CHECK(init_matmul_pd(
-                        matmul_iter_1_pd_, M, N, K, LDA1, LDB, LDC, do_sum));
-            if (LDA2 >= K && LDA2 != LDA1)
+                        matmul_iter_1_pd_, M, N, K, LDA, LDB1, LDC, do_sum));
+            if (LDB2 >= K && LDB2 != LDB1)
                 CHECK(init_matmul_pd(
-                        matmul_iter_2_pd_, M, N, K, LDA2, LDB, LDC, do_sum));
-            if (LDA3 >= K && !utils::one_of(LDA3, LDA1, LDA2))
+                        matmul_iter_2_pd_, M, N, K, LDA, LDB2, LDC, do_sum));
+            if (LDB3 >= K && !utils::one_of(LDB3, LDB1, LDB2))
                 CHECK(init_matmul_pd(
-                        matmul_iter_3_pd_, M, N, K, LDA3, LDB, LDC, do_sum));
+                        matmul_iter_3_pd_, M, N, K, LDA, LDB3, LDC, do_sum));
 
             if (rnn_.is_orig_gru) {
-                const dim_t N_part2 = rnn_.dhc;
-                const dim_t LDA1 = rnn_.ws_states_layer_ld;
-                const dim_t LDA2 = rnn_.ws_states_iter_ld;
-                const dim_t LDA3 = rnn_.dst_layer_ld_;
-                const dim_t LDA4 = rnn_.dst_iter_ld_;
-                if (LDA1 >= K)
-                    CHECK(init_matmul_pd(matmul_part2_1_pd_, M, N_part2, K,
-                            LDA1, LDB, LDC, do_sum));
-                if (LDA2 >= K && LDA2 != LDA1)
-                    CHECK(init_matmul_pd(matmul_part2_2_pd_, M, N_part2, K,
-                            LDA2, LDB, LDC, do_sum));
-                if (LDA3 >= K && !utils::one_of(LDA3, LDA1, LDA2))
-                    CHECK(init_matmul_pd(matmul_part2_3_pd_, M, N_part2, K,
-                            LDA3, LDB, LDC, do_sum));
-                if (LDA4 >= K && !utils::one_of(LDA4, LDA1, LDA2, LDA3))
-                    CHECK(init_matmul_pd(matmul_part2_4_pd_, M, N_part2, K,
-                            LDA4, LDB, LDC, do_sum));
+                const dim_t M_part2 = rnn_.dhc;
+                const dim_t LDB1 = rnn_.ws_states_layer_ld;
+                const dim_t LDB2 = rnn_.ws_states_iter_ld;
+                const dim_t LDB3 = rnn_.dst_layer_ld_;
+                const dim_t LDB4 = rnn_.dst_iter_ld_;
+                if (LDB1 >= K)
+                    CHECK(init_matmul_pd(matmul_part2_1_pd_, M_part2, N, K, LDA,
+                            LDB1, LDC, do_sum));
+                if (LDB2 >= K && LDB2 != LDB1)
+                    CHECK(init_matmul_pd(matmul_part2_2_pd_, M_part2, N, K, LDA,
+                            LDB2, LDC, do_sum));
+                if (LDB3 >= K && !utils::one_of(LDB3, LDB1, LDB2))
+                    CHECK(init_matmul_pd(matmul_part2_3_pd_, M_part2, N, K, LDA,
+                            LDB3, LDC, do_sum));
+                if (LDB4 >= K && !utils::one_of(LDB4, LDB1, LDB2, LDB3))
+                    CHECK(init_matmul_pd(matmul_part2_4_pd_, M_part2, N, K, LDA,
+                            LDB4, LDC, do_sum));
             }
         }
     }
@@ -610,22 +610,14 @@ void _ref_rnn_common_t<aprop, src_type, weights_type,
     // them run simulataneously. So, we can re-use the same scratchpad across
     // all primitives. Iterate through them to find the largest scratchpad
     // required.
-    const auto nested_pds
-            = { matmul_layer_1_pd_,
-                  matmul_layer_2_pd_,
-                  matmul_layer_3_pd_,
-                  matmul_iter_1_pd_,
-                  matmul_iter_2_pd_,
-                  matmul_iter_3_pd_,
-                  matmul_part2_1_pd_,
-                  matmul_part2_2_pd_,
-                  matmul_part2_3_pd_,
-                  matmul_part2_4_pd_,
+    const auto nested_pds = {matmul_layer_1_pd_, matmul_layer_2_pd_,
+            matmul_layer_3_pd_, matmul_iter_1_pd_, matmul_iter_2_pd_,
+            matmul_iter_3_pd_, matmul_part2_1_pd_, matmul_part2_2_pd_,
+            matmul_part2_3_pd_, matmul_part2_4_pd_,
 #if DNNL_X64
-                  bf32_wei_layer_reorder_pd_,
-                  bf32_wei_iter_reorder_pd_
+            bf32_wei_layer_reorder_pd_, bf32_wei_iter_reorder_pd_
 #endif
-              };
+    };
 
     size_t max_nested_scratchpad_size = 0;
     for (const auto &n_pd : nested_pds) {
@@ -839,9 +831,8 @@ rnn_matmul_sig((_ref_rnn_common_t<aprop, src_type, weights_type,
             engine, matmul_prim->pd()->dst_md(), mem_flag, (void *)(c_));
 
     exec_args_t matmul_args;
-    // Note Matmul src and wei may not directly map to RNN primitive src and wei
-    matmul_args[DNNL_ARG_SRC] = {&wei_mem, true};
-    matmul_args[DNNL_ARG_WEIGHTS] = {&src_mem, true};
+    matmul_args[DNNL_ARG_SRC] = {&src_mem, true};
+    matmul_args[DNNL_ARG_WEIGHTS] = {&wei_mem, true};
     matmul_args[DNNL_ARG_DST] = {&dst_mem, false};
 
     exec_ctx_t matmul_ctx(ctx, std::move(matmul_args));
@@ -2061,7 +2052,7 @@ status_t _ref_rnn_common_t<aprop, src_type, weights_type, acc_type>::execute(
     if (rnn.use_workspace)
         ws_ptr = rnn.is_fwd ? CTX_OUT_MEM(char *, DNNL_ARG_WORKSPACE)
                             : const_cast<char *>(CTX_IN_MEM(
-                                    const char *, DNNL_ARG_WORKSPACE));
+                                      const char *, DNNL_ARG_WORKSPACE));
 
     char *base_ptr = rnn.use_workspace ? ws_ptr : scratch_ptr;
     // ws_gates is only used to pass data from FWD to BWD.
